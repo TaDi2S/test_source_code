@@ -1,5 +1,6 @@
 from dbconnect import *
 from s3UpDown import *
+import chardet
 
 # 두 파일의 내용을 읽어와서 공백으로 분리한 후 리스트에 담는 함수
 def read_file_to_map(file_path):
@@ -54,8 +55,21 @@ def diff_same_file_make():
     write_list_to_file("E:/S3_test/result_diff_fileName.txt", list5)
     write_list_to_file("E:/S3_test/result_same_fileName.txt", list6)
 
+# 인코딩 확인
+def fileEncodingCheck():
+    filePath = 'D:/source/work/git/CARMPackager_LGU_repack/Content Packaging Server/Content Packaging Server 0.01_vs2008/H265MPEG2TSPackagerHashParse.cpp'
+    with open(filePath, 'rb') as file:
+        rawdata = file.read()
+        result = chardet.detect(rawdata)
+        print(result['encoding'])
+    return 0
+
 # 메인 함수
 def main():
+    
+
+    return 0
+    
     file1_path = 'E:/S3_test/result_diff_fileName.txt'
     list1 = read_file_to_list(file1_path)
     list3 = read_from_mssql_chunks(server, database, username, password, query, list1)
