@@ -2,12 +2,12 @@
 import chardet
 from ftfy import fix_text
 
-# 두 파일의 내용을 읽어와서 공백으로 분리한 후 리스트를 맵에 담는 함수
-def read_file_to_map(file_path):
+# 두 파일의 내용을 읽어와서 매개변수으로 분리한 후 리스트를 맵에 담는 함수
+def read_file_to_map(file_path, sep):
     result_map = {}
     with open(file_path, 'r', encoding='utf-8') as file:
         for line in file:
-            parts = line.strip().split(" ")
+            parts = line.strip().split(sep)
             if len(parts) > 1:  # 최소한 두 개의 요소가 있는 경우에만 처리
                 if '/' in parts[-1]:
                     parts[-1] = parts[-1].strip().split("/")[-1]
@@ -22,10 +22,11 @@ def read_file_to_list(file_path):
         lines = [line.strip() for line in file]
     return lines
 
+# 리패키징 파일 리스트 두개 비교해서 크기 다른거하고 같은거하고 구분해서 저장
 def diff_same_file_make():
     # 파일 경로 설정
     file1_path = 'E:/S3_test/raw_data.txt'
-    file2_path = 'E:/S3_test/repacked_data2.txt'
+    file2_path = 'E:/S3_test/repacked_0903.txt'
 
     # 두 파일의 내용을 리스트로 읽어오기
     list1 = read_file_to_map(file1_path)
@@ -46,7 +47,6 @@ def diff_same_file_make():
             else:
                 list4.append(result)
                 list6.append(result2)
-                
     
     write_list_to_file("E:/S3_test/result_diff.txt", list3)
     write_list_to_file("E:/S3_test/result_same.txt", list4)

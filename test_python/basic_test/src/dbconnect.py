@@ -1,11 +1,11 @@
 import pyodbc
 
 
-server = '127.0.0.1'  # 예: 'localhost' 또는 '192.168.1.100'
-database = 'CC4HDTV_1310'
-username = 'cc4iptv'
-password = 'cc4iptv'
-query = (
+basicServer = '127.0.0.1'  # 예: 'localhost' 또는 '192.168.1.100'
+basicDatabase = 'CC4HDTV_1310'
+basicUsername = 'cc4iptv'
+basicPassword = 'cc4iptv'
+basicQuery = (
 "SELECT "
 "c.[content_id] as cId, "
 "c.[ctype_exe] as type, "
@@ -17,7 +17,8 @@ query = (
 "ORDER BY c.[content_pk] DESC;"
 )
     
-def read_from_mssql_chunks(server, database, username, password, query, fileNameList):
+def read_from_mssql_chunks(fileNameList: list, server = basicServer, database = basicDatabase, username = basicUsername, 
+                           password = basicPassword, query = basicQuery) -> list:
     chunk_size=10000
     
     conn = pyodbc.connect(
@@ -38,8 +39,7 @@ def read_from_mssql_chunks(server, database, username, password, query, fileName
     while True:
         data = cursor.fetchmany(chunk_size)  # 지정한 크기만큼 데이터를 가져옴
         if not data:  # 더 이상 가져올 데이터가 없으면 종료
-            break
-        
+            break        
         
         for row in data:
             dataCnt = dataCnt+1
