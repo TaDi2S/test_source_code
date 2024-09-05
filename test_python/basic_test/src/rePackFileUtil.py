@@ -3,7 +3,7 @@ import chardet
 from ftfy import fix_text
 
 # 두 파일의 내용을 읽어와서 매개변수으로 분리한 후 리스트를 맵에 담는 함수
-def read_file_to_map(file_path, sep):
+def read_file_to_map(file_path, sep=" "):
     result_map = {}
     with open(file_path, 'r', encoding='utf-8') as file:
         for line in file:
@@ -26,7 +26,7 @@ def read_file_to_list(file_path):
 def diff_same_file_make():
     # 파일 경로 설정
     file1_path = 'E:/S3_test/raw_data.txt'
-    file2_path = 'E:/S3_test/repacked_0903.txt'
+    file2_path = 'E:/S3_test/coretrust_repacked_data_0904.txt'
 
     # 두 파일의 내용을 리스트로 읽어오기
     list1 = read_file_to_map(file1_path)

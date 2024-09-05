@@ -4,6 +4,7 @@ def getbucketList():
     """_summary_
         버킷리스트를 가져와서 리턴하는 함수
         resource 사용
+        
     Returns:
         _type_: list
     """
@@ -20,6 +21,7 @@ def getObjectInBucket(bucketName):
     """_summary_
         버킷의 오브젝트들을 가져와서 파일명 : 사이즈의 딕셔너리로 리턴하는 함수
         resource 사용
+        
     Args:
         bucketName (_str_): 버킷이름
 

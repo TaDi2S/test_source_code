@@ -1,7 +1,7 @@
 import DbConnect
 import S3Util
 import RePackFileUtil
-import boto3
+from datetime import datetime
 
 
 def readAndSaveBucketDiffData():
@@ -11,6 +11,10 @@ def readAndSaveBucketDiffData():
     rawBucketName = 'coretrust-raw-data'
     rePackBucketName = 'coretrust-repacked-data'
     testBucketName = 'coretrust-test-repacked'
+    currentTime = datetime.now()
+    formattedTime = currentTime.strftime("%Y_%m_%d %H_%M")
+    print(formattedTime)
+     
     
     rawDict = S3Util.getObjectInBucket(rawBucketName)
     rePackDict = S3Util.getObjectInBucket(rePackBucketName)
@@ -31,12 +35,12 @@ def readAndSaveBucketDiffData():
     
     for i in keysOnlyInTestDict:
         print(i)
-    RePackFileUtil.write_list_to_file('E:/S3_test/test에만 있는 파일.txt', keysOnlyInTestDict)
+    RePackFileUtil.write_list_to_file(f'E:/S3_test/test에만 있는 파일_{formattedTime}.txt', keysOnlyInTestDict)
     print(f"diff에만 있는 key : {len(keysOnlyInRawRepackDiffDict)}")
     
     for i in keysOnlyInRawRepackDiffDict:
         print(i)
-    RePackFileUtil.write_list_to_file('E:/S3_test/차이에만 있는 파일.txt', keysOnlyInRawRepackDiffDict)
+    RePackFileUtil.write_list_to_file(f'E:/S3_test/차이에만 있는 파일{formattedTime}.txt', keysOnlyInRawRepackDiffDict)
     
     
     diffSize = {k: (testDict[k], rawRepackDiffDict[k]) for k in testDict.keys() & rawRepackDiffDict.keys() if testDict[k] != rawRepackDiffDict[k]}
@@ -47,7 +51,7 @@ def readAndSaveBucketDiffData():
         print(key)
         tmpList.append(key)
         
-    RePackFileUtil.write_list_to_file('E:/S3_test/사이즈가 다른 파일.txt', tmpList)
+    RePackFileUtil.write_list_to_file(f'E:/S3_test/사이즈가 다른 파일_{formattedTime}.txt', tmpList)
 
 # 파일들을 비교해서 content_id를 구해야한다.
 def getRepackListFile():
@@ -74,10 +78,27 @@ def getRepackListFile():
 
 # 메인 함수
 def main():  
-    file1_path = 'E:/S3_test/false_list_0903.txt'
-    list1 = RePackFileUtil.read_file_to_list(file1_path)
-    list2 = DbConnect.read_from_mssql_chunks(list1)
-    RePackFileUtil.write_list_to_file('E:/S3_test/false_list_fix_0903.txt', list2)
+    rawBucketName = 'coretrust-raw-data'
+    rePackBucketName = 'coretrust-repacked-data'
+    rawDict = S3Util.getObjectInBucket(rawBucketName)
+    rePackDict = S3Util.getObjectInBucket(rePackBucketName)
+    
+    listDiff = []
+    listRaw = []
+    listRepack = []
+    
+    # raw에는 있지만 repacked에는 없는 것들을 구분하자.->key값으로
+    for key in rawDict.keys():
+        if key in rePackDict:
+            listRaw.append(f'{key},{rawDict[key]}')
+            listRepack.append(f'{key},{rePackDict[key]}')
+        else:
+            listDiff.append(key)
+            
+    RePackFileUtil.write_list_to_file('E:/S3_test/0905_list_raw.txt', listRaw)
+    RePackFileUtil.write_list_to_file('E:/S3_test/0905_list_repacked.txt', listRepack)
+    RePackFileUtil.write_list_to_file('E:/S3_test/0905_list_not_in_repacked.txt', listDiff)
+            
     return
     
 # 프로그램의 진입점
