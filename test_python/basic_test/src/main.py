@@ -95,10 +95,18 @@ def main():
         else:
             listDiff.append(key)
             
-    RePackFileUtil.write_list_to_file('E:/S3_test/0905_list_raw.txt', listRaw)
-    RePackFileUtil.write_list_to_file('E:/S3_test/0905_list_repacked.txt', listRepack)
-    RePackFileUtil.write_list_to_file('E:/S3_test/0905_list_not_in_repacked.txt', listDiff)
-            
+    RePackFileUtil.write_list_to_file('E:/S3_test/09051822_list_raw.txt', listRaw)
+    RePackFileUtil.write_list_to_file('E:/S3_test/09051822_list_repacked.txt', listRepack)
+    RePackFileUtil.write_list_to_file('E:/S3_test/09051822_list_not_in_repacked.txt', listDiff)
+   
+   
+    # fileName = 'E:/S3_test/sdsdsadasd.txt'
+    # list1 = RePackFileUtil.read_file_to_list(fileName)
+    
+    # list2 = DbConnect.read_from_mssql_chunks(list1)
+    
+    # RePackFileUtil.write_list_to_file('E:/S3_test/repack_list_0905.txt', list2)
+    
     return
     
 # 프로그램의 진입점
