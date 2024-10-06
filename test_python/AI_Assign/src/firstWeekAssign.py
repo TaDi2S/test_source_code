@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import xgboost
 
 import numpy as np
 import pandas as pd
@@ -9,56 +10,663 @@ import pydotplus
 
 import joblib
 
-from sklearn import tree, model_selection
+from sklearn import linear_model, tree, ensemble, model_selection
+from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, ConfusionMatrixDisplay, confusion_matrix
 
 import matplotlib.pyplot as plt
 
+import os
+
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-data_path = '../data/Loan_Default.csv'
-# ¡¶∞≈ «◊∏Ò 'ID', 'year', 'Gender'
-"""
-ID: µ•¿Ã≈Õ ∂«¥¬ ¥Î√‚ Ω≈√ª¿« ∞Ì¿Ø Ωƒ∫∞¿⁄.
-year: ¥Î√‚ Ω≈√ª¿Ã ¿Ã∑ÁæÓ¡¯ ø¨µµ.
-loan_limit: ¥Î√‚ «—µµø° ¥Î«— ¡§∫∏. ¥Î√‚ «—µµ∞° ¿÷¥¬¡ˆ æ¯¥¬¡ˆ?
-Gender: º∫∫∞. ∞™¿∫ 'Male', 'Female', 'Sex Not Available' 'Joint'
-approv_in_adv: ¥Î√‚¿Ã ªÁ¿¸ Ω¬¿Œµ«æ˙¥¬¡ˆ ø©∫Œ
-loan_type: ¥Î√‚¿« ¿Ø«¸. 'type1', 'type2' µÓ¿∏∑Œ ¥Î√‚ ªÛ«∞ ¡æ∑˘∏¶ ±∏∫–.
-loan_purpose: ¥Î√‚ ∏Ò¿˚
-Credit_Worthiness: Ω≈øÎ«“ ºˆ ¿÷¥¬ ªÛ≈¬? Ω≈øÎ µÓ±ﬁ, ¥Î√‚¿⁄∞° √§π´ ∫“¿Ã«‡ ∞°¥…º∫¿ª ∆«¥‹«œ¥¬ πÊπ˝ ∂«¥¬ Ω≈±‘ Ω≈øÎ¿ª πﬁ¿ª ¿⁄∞›¿Ã ¿÷¥¬¡ˆ ø©∫Œ
-open_credit: Ω≈√ª¿⁄∞° ¥Ÿ∏• ∞≥º≥µ» Ω≈øÎ ∞Ë¡¬∏¶ ∞°¡ˆ∞Ì ¿÷¥¬¡ˆ ø©∫Œ.
-business_or_commercial: ¥Î√‚¿Ã ∫Ò¡Ó¥œΩ∫ ∂«¥¬ ªÛæ˜øÎ¿Œ¡ˆ ø©∫Œ. ¥Î√‚ ±›æ◊¿« ªÁøÎ ∏Ò¿˚
-loan_amount: ¡§»Æ«— ¥Î√‚ ±›æ◊
-rate_of_interest: ¥Î√‚¿⁄∞° ¬˜øÎ¿Œø°∞‘ ∫Œ∞˙«œ¥¬ ±›æ◊¿∏∑Œ, ¥Î√‚ ø¯±›¿« πÈ∫–¿≤. ¿Ã¿⁄¿≤?
-Interest_rate_spread: ±›¿∂ ±‚∞¸¿Ã øπ±›¿⁄ø°∞‘ ¡ˆ∫“«œ¥¬ ¿Ã¿⁄¿≤∞˙ ¥Î√‚ø°º≠ πﬁ¥¬ ¿Ã¿⁄¿≤¿« ¬˜¿Ã. ±‚¡ÿ ¿Ã¿⁄¿≤ ¥Î∫Ò ∞°ªÍ ¿Ã¿⁄¿≤. ±‚¡ÿ ¡ˆºˆ ¥Î∫Ò ¿Ã¿⁄¿≤ ¬˜¿Ã.
-Upfront_charges: Ω≈±‘ ¥Î√‚ø° ¥Î«— ¥Î∞°∑Œ ¬˜øÎ¿Œ¿Ã ¥Î√‚¿⁄ø°∞‘ ¡ˆ∫“«œ¥¬ ºˆºˆ∑·. º±∫“ ºˆºˆ∑·. ¥Î√‚ √ ±‚ ºˆºˆ∑·.
-term: ¥Î√‚ ±‚∞£. ¥Î√‚ ªÛ»Ø ±‚∞£.
-Neg_ammortization: ∫Œ¡§ ªÛ»Ø(ø™ªÛ∞¢, √ ±‚ ¿Ã¿⁄∏¶ ¿˚∞‘«œ∞Ì ¿Ã∏¶ »ƒø° √ﬂ∞°«ÿ ø¯±›¿Ã ¡ı∞°«œ¥¬ ªÛ»Ø πÊΩƒ) ø©∫Œ. ¥Î√‚ ¬˜øÎ¿Œ¿Ã ¿∫«‡¿Ã ¡§«— «•¡ÿ «“∫Œ±›∫∏¥Ÿ ¿˚¿∫ ±›æ◊¿ª ¡ˆ∫“«œ¥¬ ªÛ»≤ 
-interest_only: ∞≈ƒ° ±‚∞£(¿Ã¿⁄∏∏ ªÛ»Ø«œ¥¬ ±‚∞£) ø©∫Œ. 'not_int'¥¬ ¿Ã¿⁄∏∏ ªÛ»Ø«œ¥¬ ±‚∞£¿Ã æ¯¿Ω¿ª ¿«πÃ.
-lump_sum_payment: ¿œΩ√∫“ ¡ˆ∫“ ø…º«¿Ã ¿÷¥¬¡ˆ ø©∫Œ. ∏∏±‚ ¿œΩ√ªÛ»Ø ø©∫Œ. 'not_lpsm'¿∫ ∏∏±‚ ¿œΩ√ªÛ»Ø¿Ã æ∆¥‘.
-property_value: ¥„∫∏¿« ∞°ƒ°. ¥Î√‚∞˙ ø¨∞Ëµ» ¿⁄ªÍ¿« ∞°ƒ°.
-construction_type: ¿⁄ªÍ¿« ∞«√‡ ¿Ø«¸. ∞«º≥ ¿Ø«¸.
-occupancy_type: ¿⁄ªÍ¿« ¡°¿Ø «¸≈¬. 'pr'¿∫ ∞≈¡÷øÎ(primary residence)¿ª ¿«πÃ.
-Secured_by: ¥Î√‚∫∏¡ı, ¥„∫∏ ¿Ø«¸¿‘¥œ¥Ÿ. 'home'¿∫ ¡÷≈√ ¥„∫∏∏¶ ¿«πÃ.
-total_units: ¥Î√‚∞˙ ∞¸∑√µ» ¿Ø¥÷ ºˆ. ∫ŒµøªÍ¿« √— ¥‹¿ß ºˆ¿‘¥œ¥Ÿ. '1U'¥¬ ¥‹µ∂ ¡÷≈√ ∂«¥¬ 1∞°±∏ ¡÷≈√¿ª ¿«πÃ.
-income: ¥Î√‚ Ω≈√ª¿⁄¿« º“µÊ.
-credit_type: ªÁøÎµ» Ω≈øÎ ¡∂»∏ ¿Ø«¸. Ω≈øÎ ∆Ú∞° ±‚∞¸.
-Credit_Score: Ω≈øÎ ¡°ºˆ.
-co-applicant_credit_type: ∞¯µø Ω≈√ª¿⁄¿« Ω≈øÎ ¡∂»∏ ¿Ø«¸. ∞¯µø Ω≈√ª¿⁄¿« Ω≈øÎ ∆Ú∞° ±‚∞¸.
-age: Ω≈√ª¿⁄¿« ø¨∑…¥Î.
-submission_of_application: Ω≈√ªº≠ ¡¶√‚ πÊΩƒ. 'to_inst'¥¬ ±‚∞¸¿ª ≈Î«ÿ ¡¶√‚«ﬂ¿Ω¿ª ¿«πÃ.
-LTV: ¥Î√‚ ±›æ◊ ¥Î∫Ò ¿⁄ªÍ ∞°ƒ°¿« ∫Ò¿≤. ¥„∫∏¿Œ¡§∫Ò¿≤(Loan to Value)∑Œ, ¥Î√‚ ±›æ◊¿ª ¥„∫∏ ∞°ƒ°∑Œ ≥™¥´ πÈ∫–¿≤.
-Region: ¥Î√‚ Ω≈√ª ¡ˆø™.
-Security_Type: ¥„∫∏¿« ¿Ø«¸.
-Status: ¥Î√‚ ªÛ≈¬. (1: ¥Î√‚ Ω¬¿Œ, 0: ¥Î√‚ ∞≈¿˝).
-dtir1:√— ∫Œ√§ ªÛ»Ø ∫Ò¿≤(Debt to Income Ratio). ¿Ã¥¬ º“µÊ ¥Î∫Ò ∫Œ√§¿« ∫Ò¿≤¿ª ≥™≈∏≥ø.
+print("device:{}".format(device))
 
-¬¸∞Ì : https://www.kaggle.com/code/claudiojnior/98-accuracy-eda-ml-algorithms-model-fine-tune
+# Ï†úÍ±∞ Ìï≠Î™© 'ID', 'year'
+"""
+- ID: Îç∞Ïù¥ÌÑ∞ ÎòêÎäî ÎåÄÏ∂ú Ïã†Ï≤≠Ïùò Í≥†Ïú† ÏãùÎ≥ÑÏûê.
+- year: ÎåÄÏ∂ú Ïã†Ï≤≠Ïù¥ Ïù¥Î£®Ïñ¥ÏßÑ Ïó∞ÎèÑ.
+- loan_limit: ÎåÄÏ∂ú ÌïúÎèÑÏóê ÎåÄÌïú Ï†ïÎ≥¥. ÎåÄÏ∂ú ÌïúÎèÑÍ∞Ä ÏûàÎäîÏßÄ ÏóÜÎäîÏßÄ?
+- Gender: ÏÑ±Î≥Ñ. Í∞íÏùÄ 'Male', 'Female', 'Sex Not Available' 'Joint'
+- approv_in_adv: ÎåÄÏ∂úÏù¥ ÏÇ¨Ï†Ñ ÏäπÏù∏ÎêòÏóàÎäîÏßÄ Ïó¨Î∂Ä
+- loan_type: ÎåÄÏ∂úÏùò Ïú†Ìòï. 'type1', 'type2' Îì±ÏúºÎ°ú ÎåÄÏ∂ú ÏÉÅÌíà Ï¢ÖÎ•òÎ•º Íµ¨Î∂Ñ.
+- loan_purpose: ÎåÄÏ∂ú Î™©Ï†Å
+- Credit_Worthiness: Ïã†Ïö©Ìï† Ïàò ÏûàÎäî ÏÉÅÌÉú? Ïã†Ïö© Îì±Í∏â, ÎåÄÏ∂úÏûêÍ∞Ä Ï±ÑÎ¨¥ Î∂àÏù¥Ìñâ Í∞ÄÎä•ÏÑ±ÏùÑ ÌåêÎã®ÌïòÎäî Î∞©Î≤ï ÎòêÎäî Ïã†Í∑ú Ïã†Ïö©ÏùÑ Î∞õÏùÑ ÏûêÍ≤©Ïù¥ ÏûàÎäîÏßÄ Ïó¨Î∂Ä
+- open_credit: Ïã†Ï≤≠ÏûêÍ∞Ä Îã§Î•∏ Í∞úÏÑ§Îêú Ïã†Ïö© Í≥ÑÏ¢åÎ•º Í∞ÄÏßÄÍ≥† ÏûàÎäîÏßÄ Ïó¨Î∂Ä.
+- business_or_commercial: ÎåÄÏ∂úÏù¥ ÎπÑÏ¶àÎãàÏä§ ÎòêÎäî ÏÉÅÏóÖÏö©Ïù∏ÏßÄ Ïó¨Î∂Ä. ÎåÄÏ∂ú Í∏àÏï°Ïùò ÏÇ¨Ïö© Î™©Ï†Å
+- loan_amount: Ï†ïÌôïÌïú ÎåÄÏ∂ú Í∏àÏï°
+- rate_of_interest: ÎåÄÏ∂úÏûêÍ∞Ä Ï∞®Ïö©Ïù∏ÏóêÍ≤å Î∂ÄÍ≥ºÌïòÎäî Í∏àÏï°ÏúºÎ°ú, ÎåÄÏ∂ú ÏõêÍ∏àÏùò Î∞±Î∂ÑÏú®. Ïù¥ÏûêÏú®?
+- Interest_rate_spread: Í∏àÏúµ Í∏∞Í¥ÄÏù¥ ÏòàÍ∏àÏûêÏóêÍ≤å ÏßÄÎ∂àÌïòÎäî Ïù¥ÏûêÏú®Í≥º ÎåÄÏ∂úÏóêÏÑú Î∞õÎäî Ïù¥ÏûêÏú®Ïùò Ï∞®Ïù¥. Í∏∞Ï§Ä Ïù¥ÏûêÏú® ÎåÄÎπÑ Í∞ÄÏÇ∞ Ïù¥ÏûêÏú®. Í∏∞Ï§Ä ÏßÄÏàò ÎåÄÎπÑ Ïù¥ÏûêÏú® Ï∞®Ïù¥.
+- Upfront_charges: Ïã†Í∑ú ÎåÄÏ∂úÏóê ÎåÄÌïú ÎåÄÍ∞ÄÎ°ú Ï∞®Ïö©Ïù∏Ïù¥ ÎåÄÏ∂úÏûêÏóêÍ≤å ÏßÄÎ∂àÌïòÎäî ÏàòÏàòÎ£å. ÏÑ†Î∂à ÏàòÏàòÎ£å. ÎåÄÏ∂ú Ï¥àÍ∏∞ ÏàòÏàòÎ£å.
+- term: ÎåÄÏ∂ú Í∏∞Í∞Ñ. ÎåÄÏ∂ú ÏÉÅÌôò Í∏∞Í∞Ñ.
+- Neg_ammortization: Î∂ÄÏ†ï ÏÉÅÌôò(Ïó≠ÏÉÅÍ∞Å, Ï¥àÍ∏∞ Ïù¥ÏûêÎ•º Ï†ÅÍ≤åÌïòÍ≥† Ïù¥Î•º ÌõÑÏóê Ï∂îÍ∞ÄÌï¥ ÏõêÍ∏àÏù¥ Ï¶ùÍ∞ÄÌïòÎäî ÏÉÅÌôò Î∞©Ïãù) Ïó¨Î∂Ä. ÎåÄÏ∂ú Ï∞®Ïö©Ïù∏Ïù¥ ÏùÄÌñâÏù¥ Ï†ïÌïú ÌëúÏ§Ä Ìï†Î∂ÄÍ∏àÎ≥¥Îã§ Ï†ÅÏùÄ Í∏àÏï°ÏùÑ ÏßÄÎ∂àÌïòÎäî ÏÉÅÌô© 
+- interest_only: Í±∞Ïπò Í∏∞Í∞Ñ(Ïù¥ÏûêÎßå ÏÉÅÌôòÌïòÎäî Í∏∞Í∞Ñ) Ïó¨Î∂Ä. 'not_int'Îäî Ïù¥ÏûêÎßå ÏÉÅÌôòÌïòÎäî Í∏∞Í∞ÑÏù¥ ÏóÜÏùåÏùÑ ÏùòÎØ∏.
+- lump_sum_payment: ÏùºÏãúÎ∂à ÏßÄÎ∂à ÏòµÏÖòÏù¥ ÏûàÎäîÏßÄ Ïó¨Î∂Ä. ÎßåÍ∏∞ ÏùºÏãúÏÉÅÌôò Ïó¨Î∂Ä. 'not_lpsm'ÏùÄ ÎßåÍ∏∞ ÏùºÏãúÏÉÅÌôòÏù¥ ÏïÑÎãò.
+- property_value: Îã¥Î≥¥Ïùò Í∞ÄÏπò. ÎåÄÏ∂úÍ≥º Ïó∞Í≥ÑÎêú ÏûêÏÇ∞Ïùò Í∞ÄÏπò.
+- construction_type: ÏûêÏÇ∞Ïùò Í±¥Ï∂ï Ïú†Ìòï. Í±¥ÏÑ§ Ïú†Ìòï.
+- occupancy_type: ÏûêÏÇ∞Ïùò Ï†êÏú† ÌòïÌÉú. 'pr'ÏùÄ Í±∞Ï£ºÏö©(primary residence)ÏùÑ ÏùòÎØ∏.
+- Secured_by: ÎåÄÏ∂úÎ≥¥Ï¶ù, Îã¥Î≥¥ Ïú†ÌòïÏûÖÎãàÎã§. 'home'ÏùÄ Ï£ºÌÉù Îã¥Î≥¥Î•º ÏùòÎØ∏.
+- total_units: ÎåÄÏ∂úÍ≥º Í¥ÄÎ†®Îêú Ïú†Îãõ Ïàò. Î∂ÄÎèôÏÇ∞Ïùò Ï¥ù Îã®ÏúÑ ÏàòÏûÖÎãàÎã§. '1U'Îäî Îã®ÎèÖ Ï£ºÌÉù ÎòêÎäî 1Í∞ÄÍµ¨ Ï£ºÌÉùÏùÑ ÏùòÎØ∏.
+- income: ÎåÄÏ∂ú Ïã†Ï≤≠ÏûêÏùò ÏÜåÎìù.
+- credit_type: ÏÇ¨Ïö©Îêú Ïã†Ïö© Ï°∞Ìöå Ïú†Ìòï. Ïã†Ïö© ÌèâÍ∞Ä Í∏∞Í¥Ä.
+- Credit_Score: Ïã†Ïö© Ï†êÏàò.
+- co-applicant_credit_type: Í≥µÎèô Ïã†Ï≤≠ÏûêÏùò Ïã†Ïö© Ï°∞Ìöå Ïú†Ìòï. Í≥µÎèô Ïã†Ï≤≠ÏûêÏùò Ïã†Ïö© ÌèâÍ∞Ä Í∏∞Í¥Ä.
+- age: Ïã†Ï≤≠ÏûêÏùò Ïó∞Î†πÎåÄ.
+- submission_of_application: Ïã†Ï≤≠ÏÑú Ï†úÏ∂ú Î∞©Ïãù. 'to_inst'Îäî Í∏∞Í¥ÄÏùÑ ÌÜµÌï¥ Ï†úÏ∂úÌñàÏùåÏùÑ ÏùòÎØ∏.
+- LTV: ÎåÄÏ∂ú Í∏àÏï° ÎåÄÎπÑ ÏûêÏÇ∞ Í∞ÄÏπòÏùò ÎπÑÏú®. Îã¥Î≥¥Ïù∏Ï†ïÎπÑÏú®(Loan to Value)Î°ú, ÎåÄÏ∂ú Í∏àÏï°ÏùÑ Îã¥Î≥¥ Í∞ÄÏπòÎ°ú ÎÇòÎàà Î∞±Î∂ÑÏú®.
+- Region: ÎåÄÏ∂ú Ïã†Ï≤≠ ÏßÄÏó≠.
+- Security_Type: Îã¥Î≥¥Ïùò Ïú†Ìòï.
+- Status: Ï±ÑÎ¨¥ Î∂àÏù¥Ìñâ Ïó¨Î∂Ä. (Lable column) 
+- dtir1:Ï¥ù Î∂ÄÏ±Ñ ÏÉÅÌôò ÎπÑÏú®(Debt to Income Ratio). Ïù¥Îäî ÏÜåÎìù ÎåÄÎπÑ Î∂ÄÏ±ÑÏùò ÎπÑÏú®ÏùÑ ÎÇòÌÉÄÎÉÑ.
+
+Ï∞∏Í≥† : https://www.kaggle.com/code/claudiojnior/98-accuracy-eda-ml-algorithms-model-fine-tune
 """
 
+data_path = './test_python/AI_Assign/data/Loan_Default.csv'
 
 feature_name = ['loan_limit', 'approv_in_adv', 'loan_type', 'loan_purpose', 'Credit_Worthiness', 'open_credit', 'business_or_commercial', 
                 'loan_amount', 'rate_of_interest', 'Interest_rate_spread', 'Upfront_charges', 'term', 'Neg_ammortization', 'interest_only', 
                 'lump_sum_payment', 'property_value', 'construction_type', 'occupancy_type', 'Secured_by', 'total_units', 'income', 'credit_type', 
                 'Credit_Score', 'co-applicant_credit_type', 'age', 'submission_of_application', 'LTV', 'Region', 'Security_Type', 'Status', 'dtir1']
+
+test_data_ratio = 0.3
+random_state = 0
+
+max_depth = 5
+min_sample_leaf = 3 
+
+num_binomial_class = 2   # Í≤∞Í≥ºÎäî ÏÉÅÌôò ÌñàÎã§ Ïïà ÌñàÎã§ 2Í∞ú
+
+learning_rate = 5e-3    # ÌïúÎ≤à ÌïôÏäµÏùÑ ÏãúÌÇ§ÎäîÎç∞ Ï†ÅÏö©ÌïòÎäî Ï†ïÎèÑ
+epochs = 200            # Ï†ÑÏ≤¥ Îç∞Ïù¥ÌÑ∞Î•º Î™á Î≤à Î™®Îç∏ÏóêÍ≤å Î≥¥Ïó¨Ï£ºÎ©∞ Ìï† Í≤ÉÏù∏Í∞Ä
+n_estimators = 100      # ÎûúÎç§ Ìè¨Î†àÏä§Ìä∏ ÏïàÏùò Í≤∞Ï†ï Ìä∏Î¶¨ Í∞ØÏàò
+
+criterion = nn.CrossEntropyLoss()
+
+missing_value_flag = 'replace'  # Í≤∞Ï∏°ÏπòÎäî ÎåÄÏ≤¥Í∞íÏúºÎ°ú
+
+num_sample = 10
+
+eda_df = pd.read_csv(data_path) # Îç∞Ïù¥ÌÑ∞ Î∂àÎü¨Ïò§Í∏∞
+print(eda_df.head(num_sample)) # Í∞úÏàòÎßåÌÅº ÏÉÅÏúÑ Îç∞Ïù¥ÌÑ∞ Ï∂úÎ†•
+
+print ('# of data: {row}\n# of feature: {col}\n'.format(row = eda_df.shape[0], col = eda_df.shape[1]))
+
+print('feature name/dtype')
+numerical_count = 0             # Ïà´ÏûêÌòï featureÏùò Í∞úÏàòÎ•º ÏÖÄ Î≥ÄÏàò
+categorical_count = 0          # Ïà´ÏûêÌòïÏù¥ ÏïÑÎãå featureÏùò Í∞úÏàòÎ•º ÏÖÄ Î≥ÄÏàò
+
+for feature_name, feature_type in zip(eda_df.columns, eda_df.dtypes):
+    # Ïà´ÏûêÌòï ÏûêÎ£åÌòïÏù∏ÏßÄ ÌôïÏù∏
+    if np.issubdtype(feature_type, np.number):      # isuubdtype(dtype,upperdtype) ÏûêÎ£åÌòï dtypeÏù¥ upperdatatyepÏùò ÌïòÏúÑ ÏûêÎ£åÌòïÏù¥Î©¥ True, ÏïÑÎãàÎ©¥ False
+        numerical_count += 1
+    else:
+        categorical_count += 1
+    print('{} : {}'.format(feature_name, feature_type))
+
+print('\n # of numerical item: {}/# of categorical item: {}'.format(numerical_count, categorical_count))
+
+print('\nstatistcal infos')
+print(eda_df.describe(include='all'))       # feature Î≥ÑÎ°ú ÌÜµÍ≥ÑÏ†ïÎ≥¥Îì§ÏùÑ ÌëúÎ°ú Ï†ïÎ¶¨Ìï¥Ï§å
+
+# label_dfÎäî pandasÏùò SeriesÎùºÎäî Ïù∏Îç±Ïã±Îêú 1Ï∞®Ïõê Î∞∞Ïó¥ ÏûêÎ£åÌòï
+# SeriesÎäî indexÎ•º Î¨µÏãúÏ†ÅÏúºÎ°ú 0Î∂ÄÌÑ∞ ÏãúÏûëÌïòÎäî Ï†ïÏàòÌòïÏúºÎ°ú Í∞ÄÏßà Ïàò ÏûàÏßÄÎßå Î™ÖÏãúÏ†ÅÏúºÎ°ú ÏßÄÏ†ïÌï† ÏàòÎèÑ ÏûàÎã§.
+# ÏùºÎã®ÏùÄ dictÏôÄ listÎ•º ÎèôÏãúÏóê ÏÇ¨Ïö©Ìï† Ïàò ÏûàÎäî ÏûêÎ£åÌòïÏúºÎ°ú ÏÉùÍ∞Å
+# Ïù∏Îç±Ïä§Î•º Î∂à Í∑úÏπôÌïú Ï†ïÏàòÌòïÏùÑ ÏÇ¨Ïö©ÌñàÏùÑ Îïå locÎ•º Ïù¥Ïö©Ìï¥ÏÑú Î™ÖÏãúÏ†Å Ïù∏Îç±Ïä§Î•º ÏÇ¨Ïö©Ìï† Ïàò ÏûàÍ≥† ilocÎ•º Ïù¥Ïö©Ìï¥ Î¨µÏãúÏ†ÅÏúºÎ°ú ÏÇ¨Ïö©Ìï† Ïàò ÏûàÎã§.
+# featureÏôÄ label Î∂ÑÎ¶¨
+label_df = eda_df['Status']                 # Ï†ïÎãµ Ï†ïÎ≥¥ feature
+eda_df = eda_df.drop(columns=['ID', 'year', 'Status'])      #.3       
+label_dict = label_df.value_counts()    # Ï†ïÎãµ Ï†ïÎ≥¥Ïùò Ï†ïÎ¶¨
+
+print('label shape: {}'.format(label_df.shape))
+
+print('\nnum of negative label: {} / num of positive label: {}'.format(label_dict[0], label_dict[1])) # 0Ïùò Î∞úÏÉù ÌöüÏàòÏôÄ 1Ïùò Î∞úÏÉùÌöüÏàò count
+print('% of negative label: {} / % of positive label: {}'.format(label_dict[0] / label_df.shape[0] * 100, label_dict[1] / label_df.shape[0] * 100)) # ÌçºÏÑºÌÖåÏù¥ÏßÄÎ°ú ÎÇòÌÉÄÎÇ∏Îã§.
+print('sum:{}\n'.format(sum(label_df.to_numpy())))
+# Îç∞Ïù¥ÌÑ∞ Ï†ÑÏ≤òÎ¶¨
+print('\nStart Removing Duplicates') # Ï§ëÎ≥µÏπò Ï†úÍ±∞ Ïã§Ïãú
+duplicates = eda_df.duplicated()
+beforLen = len(eda_df)
+eda_df = eda_df[~duplicates]
+label_df = label_df[~duplicates]
+afterLen = len(eda_df)
+
+print('Delect {} duplicate data'.format(beforLen - afterLen))
+# Í≤∞Ï∏°Ïπò Ï≤òÎ¶¨
+print('\nStart Handling Missing Values')
+print('features / # of missing values\n')
+print(eda_df.isnull().sum())
+
+if missing_value_flag == 'remove':
+    print('Remove missing values\n')
+    non_missing = ~eda_df.isnull().any(axis=1)
+    missing_rows = eda_df[eda_df.isnull().any(axis=1)]
+    # 'status' Ïª¨Îüº Í∞í Ï∂úÎ†•
+    del_index = missing_rows.index
+    
+    deleted_label_values = label_df.iloc[del_index].sum()
+    
+    print("ÏÇ≠Ï†úÎêòÎäî Ïù∏Îç±Ïä§Ïóê Ìï¥ÎãπÌïòÎäî label_dfÏùò Í∞íÎì§:\n", deleted_label_values)
+    
+    print("ÏÇ≠Ï†úÎêòÎäî ÌñâÏùò Í∞úÏàò: {}".format(len(eda_df) - non_missing.sum()))
+    eda_df = eda_df[non_missing]
+    label_df = label_df[non_missing]       
+    # removeÎ•º ÌïòÎ©¥ statusÍ∞Ä 1Ïù∏ Í∞íÎì§ÏùÄ Ï†ÑÎ∂Ä ÏÇ≠Ï†ú ÎêúÎã§
+
+elif missing_value_flag == 'replace':
+    print('Replace missing values with mean\n')
+    for feature_name in eda_df.columns:
+        if eda_df[feature_name].dtype in ['int32', 'int64', 'float32', 'float64']:
+            if eda_df[feature_name].isnull().sum() > 0:                                   # Í≤∞Ï∏°ÏπòÍ∞Ä 1Í∞ú Ïù¥ÏÉÅÏù¥Î©¥
+                eda_df[feature_name].fillna(eda_df[feature_name].mean(), inplace=True)    # Ïª¨ÎüºÏùò ÌèâÍ∑†Í∞íÏùÑ ÎÑ£ÎäîÎã§ eda_df[feature_name].mean() -> ÌèâÍ∑†, inplace=True ÏõêÎ≥∏ Îç∞Ïù¥ÌÑ∞ÌîÑÎ†àÏûÑÏóê ÏßÅÏ†ë Ï†ÅÏö©
+        else:
+            if eda_df[feature_name].isnull().sum() > 0:                                   # Í≤∞Ï∏°ÏπòÍ∞Ä 1Í∞ú Ïù¥ÏÉÅÏù¥Î©¥
+                mode_value = eda_df[feature_name].mode()[0]                               # ÏµúÎπàÍ∞íÏúºÎ°ú ÎÑ£ÎäîÎã§.
+                eda_df[feature_name].fillna(mode_value, inplace=True)
+
+
+print('sum:{}\n'.format(sum(label_df.to_numpy())))
+
+
+class LoanClassificationDataLoad:
+    def __init__(self, path, feature_names, test_data_ratio, random_state, feature_data, label_data, imbalance_flag):
+        self.data_path = path
+        self.feature_names = feature_names
+        self.test_data_ratio = test_data_ratio
+        self.random_state = random_state
+        
+        self.feature_data = feature_data.copy()
+        self.label_data = label_data.copy() 
+      
+        
+      
+        self.imbalance_feate_data, self.imbalance_labe_data = self.get_imbalance_dataset()
+        
+        if imbalance_flag == True:
+            self.train_data, self.test_data, self.train_label, self.test_label = train_test_split(self.imbalance_feate_data, self.imbalance_labe_data, test_size=self.test_data_ratio, random_state=self.random_state)
+        else:
+            self.train_data, self.test_data, self.train_label, self.test_label = train_test_split(self.feature_data, self.label_data, test_size=self.test_data_ratio, random_state=self.random_state)
+                
+      
+      
+        print('train data shape: {}/label shape: {}'.format(self.train_data.shape, self.train_label.shape))
+        print('test data shape: {}/label shape: {}'.format(self.test_data.shape, self.test_label.shape))
+      
+        self.train_numerical_features = self.train_data.select_dtypes(include=[np.number])
+        self.train_numerical_array = self.train_numerical_features.values
+        self.test_numerical_features = self.test_data.select_dtypes(include=[np.number])
+        self.test_numerical_array = self.test_numerical_features.values
+        
+        self.train_categorical_features = self.train_data.select_dtypes(include=[object])
+        self.test_categorical_features = self.test_data.select_dtypes(include=[object])
+
+        self.min_max_normalize_data()
+        self.standardize_data()     
+           
+        self.encoding_ont_hot()
+        
+        print('numerical feature count: {}'.format(self.train_numerical_array.shape[1]))
+        print('categorical feature count: {}'.format(len(self.train_categorical_features.columns)+1))
+        print('encoded feature count: {}'.format(sum(self.train_encoded_feature_count_list)))
+        
+      
+
+        self.train_encoded_array = np.hstack(self.train_one_hot_encoded_list)
+        self.test_encoded_array = np.hstack(self.test_one_hot_encoded_list)
+        
+        self.train_encoded_array = np.hstack(self.train_one_hot_encoded_list)
+        self.test_encoded_array = np.hstack(self.test_one_hot_encoded_list)
+
+        self.min_max_train_processed_array = np.hstack((self.scaled_min_max_train_data, self.train_encoded_array))
+        self.standardize_train_processed_array = np.hstack((self.scaled_standardize_train_data, self.train_encoded_array))
+
+        self.min_max_test_processed_array = np.hstack((self.scaled_min_max_test_data, self.test_encoded_array))
+        self.standardize_test_processed_array = np.hstack((self.scaled_standardize_test_data, self.test_encoded_array))
+        
+        
+        self.test_label_array = self.test_label.to_numpy()        
+        self.train_label_array = self.train_label.to_numpy()
+        
+        print('processed min-max train data array shape: {} / label shape: {}'.format(self.min_max_train_processed_array.shape, self.train_label_array.shape))
+        print('processed standardize train data array shape: {} / label shape: {}'.format(self.standardize_train_processed_array.shape, self.train_label_array.shape))
+        
+        print('processed min-max test data array shape: {}/label shape: {}'.format(self.min_max_test_processed_array.shape, self.test_label_array.shape))
+        print('processed standardize test data array shape: {}/label shape: {}'.format(self.standardize_test_processed_array.shape, self.test_label_array.shape))
+        #self.show_label_dict()
+    
+    def get_imbalance_dataset(self):
+        positive_indices = np.where(self.label_data == 1)[0]
+        positive_indices = np.random.choice(positive_indices, size=int(len(positive_indices)/10), replace=False)
+        negative_indices = np.where(self.label_data == 0)[0]
+
+        selected_indices = np.concatenate((positive_indices, negative_indices))
+
+        print('self.feature_data type:{}, self.label_data type:{}, pos:{}, neg:{}, sel:{}'.format(type(self.feature_data), type(self.label_data), type(positive_indices), type(negative_indices), type(selected_indices)))
+        
+        return self.feature_data.iloc[selected_indices], self.label_data.iloc[selected_indices]
+    
+    def __call__(self, flag, scaling_flag):
+        if flag == 'train':
+            if scaling_flag == 'min-max':
+                return self.min_max_train_processed_array, self.train_label_array
+            elif scaling_flag == 'standardize':
+                return self.standardize_train_processed_array, self.train_label_array
+        elif flag == 'test':
+            if scaling_flag == 'min-max':
+                return self.min_max_test_processed_array, self.test_label_array
+            elif scaling_flag == 'standardize':
+                return self.standardize_test_processed_array, self.test_label_array
+        
+    # min-max
+    def min_max_normalize_data(self):
+        min_values = np.min(self.train_numerical_array, axis=0)
+        max_values = np.max(self.train_numerical_array, axis=0)
+        
+        max_values = np.where(max_values == min_values, min_values + 1e-5, max_values)
+        
+        self.scaled_min_max_train_data = (self.train_numerical_array - min_values) / (max_values - min_values)
+        self.scaled_min_max_test_data = (self.test_numerical_array - min_values) / (max_values - min_values)
+        
+    # standardize
+    def standardize_data(self):
+        mean = np.mean(self.train_numerical_array, axis=0)
+        std = np.std(self.train_numerical_array, axis=0)
+
+        std = np.where(std == 0, 1e-5, std)
+            
+        self.scaled_standardize_train_data = (self.train_numerical_array - mean) / std
+        self.scaled_standardize_test_data = (self.test_numerical_array - mean) / std
+        
+    def encoding_ont_hot(self):
+        self.train_one_hot_encoded_list = []
+        self.test_one_hot_encoded_list = []
+
+        self.train_encoded_feature_count_list = []
+        print('One-hot encoding of categorical features\n')
+        for feature_name in self.train_categorical_features.columns:
+            unique_values = np.unique(self.train_categorical_features[feature_name])
+            self.train_encoded_feature_count_list.append(len(unique_values)+1)
+
+            self.train_encoded_array = np.zeros((self.train_categorical_features.shape[0], len(unique_values) + 1))
+            for index, value in enumerate(self.train_categorical_features[feature_name]):
+                self.train_encoded_array[index, np.where(unique_values == value)[0]] = 1
+            self.train_one_hot_encoded_list.append(self.train_encoded_array)
+
+            self.test_encoded_array = np.zeros((self.test_categorical_features.shape[0], len(unique_values) + 1))
+            for index, value in enumerate(self.test_categorical_features[feature_name]):
+                if value in unique_values:
+                    self.test_encoded_array[index, np.where(unique_values == value)[0]] = 1
+                else:
+                    self.test_encoded_array[index, -1] = 1
+            self.test_one_hot_encoded_list.append(self.test_encoded_array)
+      
+        
+
+loanClass = LoanClassificationDataLoad(data_path, feature_names=feature_name, random_state=random_state, test_data_ratio=test_data_ratio, feature_data=eda_df, label_data=label_df, imbalance_flag=False)
+
+
+loanImbalanceClass = LoanClassificationDataLoad(data_path, feature_names=feature_name, random_state=random_state, test_data_ratio=test_data_ratio, feature_data=eda_df, label_data=label_df, imbalance_flag=True)
+    
+min_max_train_data, min_max_train_label_data = loanClass("train", "min-max")
+min_max_test_data, min_max_test_label_data = loanClass("test", "min-max")
+
+standardize_train_data, standardize_train_label_data = loanClass("train", "standardize")
+standardize_test_data, standardize_test_label_data = loanClass("test", "standardize")
+
+imbalance_min_max_train_data, imbalance_min_max_train_label_data = loanImbalanceClass("train", "min-max")
+imbalance_min_max_test_data, imbalance_min_max_test_label_data = loanImbalanceClass("test", "min-max")
+
+imbalance_standardize_train_data, imbalance_standardize_train_label_data = loanImbalanceClass("train", "standardize")
+imbalance_standardize_test_data, imbalance_standardize_test_label_data = loanImbalanceClass("test", "standardize")
+
+# Î™®Îç∏Ï†ïÏùò, Ï†ïÎãµÏù¥ ÎëêÍ∞úÎãà BinomialLogistic, pytorch
+class TorchLogisticRegression(nn.Module):
+  def __init__(self, data, num_class):
+    super(TorchLogisticRegression, self).__init__()
+    # ÌñâÎ†¨ Í≥±Ïùò ÌäπÏÑ± : XW
+    # Îç∞Ïù¥ÌÑ∞ : Í∞ÄÏßÄÍ≥† ÏûàÎäî Îç∞Ïù¥ÌÑ∞Ïùò Í∞úÏàò (row) x Í∞ÄÏßÄÍ≥† ÏûàÎäî Îç∞Ïù¥ÌÑ∞Ïùò ÌîºÏ≥êÏùò Í∞úÏàò (col)
+    self.logistic_regressor = nn.Linear(data.shape[1], num_class) # weight matrix, bias vector
+
+  def forward(self, data): # classÏùò instance Ìò∏Ï∂ú Ïãú ÏÇ¨Ïö©ÎêòÎäî Î∂ÄÎ∂Ñ
+    logit = self.logistic_regressor(data)
+
+    return logit
+
+  def get_params(self): # Î™®Îç∏ ÎÇ¥ weight matrixÏôÄ bias vector ÌååÎùºÎØ∏ÌÑ∞ ÌôïÏù∏ÌïòÍ∏∞ ÏúÑÌïú Î∂ÄÎ∂Ñ
+    torch_weight, torch_bias = self.logistic_regressor.weight.detach().cpu().numpy(), self.logistic_regressor.bias.detach().cpu().numpy()
+
+    return torch_weight, torch_bias
+
+min_max_logistic_regressor = TorchLogisticRegression(min_max_train_data, num_binomial_class).to(device)
+min_max_torch_model_optimizer = torch.optim.SGD(min_max_logistic_regressor.parameters(), lr =learning_rate)
+
+imbalanced_min_max_logistic_regressor = TorchLogisticRegression(imbalance_min_max_train_data, num_binomial_class).to(device)
+imbalanced_min_max_torch_model_optimizer = torch.optim.SGD(imbalanced_min_max_logistic_regressor.parameters(), lr =learning_rate)
+
+standardize_logistic_regressor = TorchLogisticRegression(standardize_train_data, num_binomial_class).to(device)
+standardize_torch_model_optimizer = torch.optim.SGD(standardize_logistic_regressor.parameters(), lr =learning_rate)
+
+imbalanced_standardize_logistic_regressor = TorchLogisticRegression(imbalance_standardize_train_data, num_binomial_class).to(device)
+imbalanced_standardize_torch_model_optimizer = torch.optim.SGD(imbalanced_standardize_logistic_regressor.parameters(), lr =learning_rate)
+
+def train_logistic_regressor(data, label, model, criterion, optimizer, epochs, device):
+  model.train()
+
+  data, label = torch.tensor(data, dtype=torch.float32).to(device), torch.tensor(label, dtype=torch.long).to(device)
+
+  for epoch in range(epochs):
+    optimizer.zero_grad()
+
+    result = model(data)
+
+    loss = criterion(result, label)
+
+    loss.backward()
+    optimizer.step()
+    
+
+train_logistic_regressor(min_max_train_data, min_max_train_label_data, min_max_logistic_regressor, criterion, min_max_torch_model_optimizer, epochs, device)
+
+train_logistic_regressor(imbalance_min_max_train_data, imbalance_min_max_train_label_data, imbalanced_min_max_logistic_regressor, criterion, imbalanced_min_max_torch_model_optimizer, epochs, device)
+
+train_logistic_regressor(standardize_train_data, standardize_train_label_data, standardize_logistic_regressor, criterion, standardize_torch_model_optimizer, epochs, device)
+
+train_logistic_regressor(imbalance_standardize_train_data, imbalance_standardize_train_label_data, imbalanced_standardize_logistic_regressor, criterion, imbalanced_min_max_torch_model_optimizer, epochs, device)
+
+def test_logistic_regressor(data, label, model, device):
+    model.eval()
+    data, label = torch.tensor(data, dtype=torch.float32).to(device), torch.tensor(label, dtype=torch.long).detach().cpu().numpy()
+    with torch.no_grad():
+      result = model(data)
+      _, result = torch.max(result, 1)
+      result = result.detach().cpu().numpy()
+      accuracy = accuracy_score(label, result)
+      precision = precision_score(label, result)
+      recall = recall_score(label, result)
+      f1_measure = f1_score(label, result)
+
+    print('acc: {}/precision: {}/recall: {}/f1-measure: {}'.format(accuracy, precision, recall, f1_measure))
+
+    result_confusion_matrix = confusion_matrix(label, result)
+    ConfusionMatrixDisplay(result_confusion_matrix, display_labels=[0, 1]).plot()
+    plt.show()
+    
+print('Logistic Regressor')
+print('=========================================================================================')
+print('min_max model\n')
+test_logistic_regressor(min_max_test_data, min_max_test_label_data, min_max_logistic_regressor, device)
+
+print('=========================================================================================')
+print('imbalanced min_max model\n')
+
+test_logistic_regressor(imbalance_min_max_test_data, imbalance_min_max_test_label_data, imbalanced_min_max_logistic_regressor, device) 
+print('=========================================================================================')
+print('standardize model\n')
+
+test_logistic_regressor(standardize_test_data, standardize_test_label_data, standardize_logistic_regressor, device)
+print('=========================================================================================')
+print('imbalanced standardize model\n')
+
+test_logistic_regressor(imbalance_standardize_test_data, imbalance_standardize_test_label_data, imbalanced_standardize_logistic_regressor, device) 
+
+class SklearnDecisionTreeClassifier:
+    def __init__(self, feature_names, max_depth, min_sample_leaf, random_state):
+        self.feature_names = feature_names
+        self.max_depth = max_depth
+        self.min_sample_leaf = min_sample_leaf
+        self.random_state = random_state
+
+        self.classifier = tree.DecisionTreeClassifier(
+            max_depth=self.max_depth,
+            min_samples_leaf=self.min_sample_leaf,
+            random_state=self.random_state
+        )
+
+    def __call__(self, data):
+        return self.classifier.predict(data)
+
+    def show_tree(self):
+        tree.plot_tree(self.classifier)
+
+    def show_customized_tree(self):
+        dot_data = tree.export_graphviz(
+            self.classifier,
+            out_file=None,
+            feature_names=self.feature_names[:-1],
+            class_names = ['0', '1'],
+            filled=True,
+            rounded=True,
+            special_characters=True
+        )
+        graph = graphviz.Source(dot_data)
+        graph.view()
+    def train_model(self, train_data, train_label):
+        self.classifier.fit(train_data, train_label)
+        
+    def test_model(model, data, label):
+        pred = model.classifier.predict(data)
+        accuracy = accuracy_score(label, pred)
+        precision = precision_score(label, pred)
+        recall = recall_score(label, pred)
+        f1_measure = f1_score(label, pred)
+        print('acc: {}/precision: {}/recall: {}/f1-measure: {}'.format(accuracy, precision, recall, f1_measure))
+
+        result_confusion_matrix = confusion_matrix(label, pred)
+        ConfusionMatrixDisplay(result_confusion_matrix, display_labels=[0, 1]).plot()
+        plt.show()
+        
+# Î™®Îç∏ ÌïôÏäµÎ∞è ÌÖåÏä§Ìä∏
+print('DecisionTree')
+print('=========================================================================================')
+print('min-max model\n')
+min_max_sklearn_dt_classifier = SklearnDecisionTreeClassifier(feature_name, max_depth, min_sample_leaf, random_state)
+min_max_sklearn_dt_classifier.train_model(min_max_train_data, min_max_train_label_data)
+min_max_sklearn_dt_classifier.test_model(min_max_test_data, min_max_test_label_data)
+print('=========================================================================================')
+print('imbalanced min-max model\n')
+imbalanced_min_max_sklearn_dt_classifier = SklearnDecisionTreeClassifier(feature_name, max_depth, min_sample_leaf, random_state)
+imbalanced_min_max_sklearn_dt_classifier.train_model(imbalance_min_max_train_data,imbalance_min_max_train_label_data)
+imbalanced_min_max_sklearn_dt_classifier.test_model(imbalance_min_max_test_data, imbalance_min_max_test_label_data)
+print('=========================================================================================')
+print('standardize model\n')
+standardize_sklearn_dt_classifier = SklearnDecisionTreeClassifier(feature_name, max_depth, min_sample_leaf, random_state)
+standardize_sklearn_dt_classifier.train_model(standardize_train_data, standardize_train_label_data)
+standardize_sklearn_dt_classifier.test_model(standardize_test_data, standardize_test_label_data)
+print('=========================================================================================')
+print('imbalanced standardize model\n')
+imbalanced_standardize_sklearn_dt_classifier = SklearnDecisionTreeClassifier(feature_name, max_depth, min_sample_leaf, random_state)
+imbalanced_standardize_sklearn_dt_classifier.train_model(imbalance_standardize_train_data, imbalance_standardize_train_label_data)
+imbalanced_standardize_sklearn_dt_classifier.test_model(imbalance_standardize_test_data, imbalance_standardize_test_label_data)
+
+# randowm forest
+class SklearnRandomForestClassifier:
+  def __init__(self, n_estimators, max_depth, random_state):
+    self.n_estimators = n_estimators
+    self.max_depth = max_depth
+    self.random_state = random_state
+
+    self.classifier = ensemble.RandomForestClassifier(
+        n_estimators=self.n_estimators,
+        max_depth=self.max_depth,
+        random_state=self.random_state
+    )
+
+  def __call__(self, data):
+    return self.classifier.predict(data)
+
+  def train_model(self, train_data, train_label):
+    self.classifier.fit(train_data, train_label)
+
+  def test_model(self, test_data, test_label):
+
+    pred = self.classifier.predict(test_data)
+    accuracy = accuracy_score(test_label, pred)
+    precision = precision_score(test_label, pred)
+    recall = recall_score(test_label, pred)
+    f1_measure = f1_score(test_label, pred)
+
+    print('acc: {}/precision: {}/recall: {}/f1-measure: {}'.format(accuracy, precision, recall, f1_measure))
+    
+
+print('Random Forest')
+print('=========================================================================================')
+print('min-max model\n')
+min_max_sklearn_rf_classifier = SklearnRandomForestClassifier(n_estimators, max_depth, random_state)
+min_max_sklearn_rf_classifier.train_model(min_max_train_data, min_max_train_label_data)
+min_max_sklearn_rf_classifier.test_model(min_max_test_data, min_max_test_label_data)
+print('=========================================================================================')
+print('imbalanced min-max model\n')
+imbalanced_min_max_sklearn_rf_classifier = SklearnRandomForestClassifier(n_estimators, max_depth, random_state)
+imbalanced_min_max_sklearn_rf_classifier.train_model(min_max_train_data, min_max_train_label_data)
+imbalanced_min_max_sklearn_rf_classifier.test_model(min_max_test_data, min_max_test_label_data)
+print('=========================================================================================')
+print('standardize model\n')
+standardize_sklearn_rf_classifier = SklearnRandomForestClassifier(n_estimators, max_depth, random_state)
+standardize_sklearn_rf_classifier.train_model(standardize_train_data, standardize_train_label_data)
+standardize_sklearn_rf_classifier.test_model(standardize_test_data, standardize_test_label_data)
+print('=========================================================================================')
+print('imbalanced standardize model\n')
+imbalanced_standardize_sklearn_rf_classifier = SklearnRandomForestClassifier(n_estimators, max_depth, random_state)
+imbalanced_standardize_sklearn_rf_classifier.train_model(imbalance_standardize_train_data, imbalance_standardize_train_label_data)
+imbalanced_standardize_sklearn_rf_classifier.test_model(imbalance_standardize_test_data, imbalance_standardize_test_label_data)
+
+class SklearnGradientBoostingClassifier:
+  def __init__(self, n_estimators, max_depth, random_state):
+    self.n_estimators = n_estimators
+    self.max_depth = max_depth
+    self.random_state = random_state
+
+    self.classifier = ensemble.GradientBoostingClassifier(
+        n_estimators=self.n_estimators,
+        max_depth=self.max_depth,
+        random_state=self.random_state
+    )
+
+  def __call__(self, data):
+    return self.classifier.predict(data)
+
+  def train_model(self, train_data, train_label):
+      self.classifier.fit(train_data, train_label)
+
+  def test_model(self, test_data, test_label):
+    pred = self.classifier.predict(test_data)
+
+    accuracy = accuracy_score(test_label, pred)
+    recall = recall_score(test_label, pred)
+    precision = precision_score(test_label, pred)
+    f1 = f1_score(test_label, pred)
+
+    print('acc: {}'.format(accuracy))
+    print('recall: {}'.format(recall))
+    print('precision: {}'.format(precision))
+    print('f1: {}'.format(f1))
+
+print('Gradient Boosted Trees for Classifciation')
+print('=========================================================================================')
+print('min-max model\n')
+min_max_sklearn_gbdt_classifier= SklearnGradientBoostingClassifier(n_estimators, max_depth, random_state)
+min_max_sklearn_gbdt_classifier.train_model(min_max_train_data, min_max_train_label_data)
+min_max_sklearn_gbdt_classifier.test_model(min_max_test_data, min_max_test_label_data)
+print('=========================================================================================')
+print('imbalanced min-max model\n')
+imbalance_min_max_sklearn_gbdt_classifier= SklearnGradientBoostingClassifier(n_estimators, max_depth, random_state)
+imbalance_min_max_sklearn_gbdt_classifier.train_model(imbalance_min_max_train_data, imbalance_min_max_train_label_data)
+imbalance_min_max_sklearn_gbdt_classifier.test_model(imbalance_min_max_test_data, imbalance_min_max_test_label_data)
+print('=========================================================================================')
+print('standardize model\n')
+standardize_sklearn_gbdt_classifier= SklearnGradientBoostingClassifier(n_estimators, max_depth, random_state)
+standardize_sklearn_gbdt_classifier.train_model(standardize_train_data, standardize_train_label_data)
+standardize_sklearn_gbdt_classifier.test_model(standardize_test_data, standardize_test_label_data)
+print('=========================================================================================')
+print('imbalanced standardize model\n')
+imbalance_standardize_sklearn_gbdt_classifier= SklearnGradientBoostingClassifier(n_estimators, max_depth, random_state)
+imbalance_standardize_sklearn_gbdt_classifier.train_model(imbalance_standardize_train_data, imbalance_standardize_train_label_data)
+imbalance_standardize_sklearn_gbdt_classifier.test_model(imbalance_standardize_test_data, imbalance_standardize_test_label_data)
+
+
+class XGBoostClassifier:
+  def __init__(self, random_state):
+    self.random_state = random_state
+
+    self.classifier = xgboost.XGBClassifier(
+      objective='binary:logistic',
+      eval_metric='logloss',
+      random_state=self.random_state
+    )
+
+  def __call__(self, data):
+    return self.classifier.predict(data)
+
+  def train_model(self, train_data, train_label):
+      self.classifier.fit(train_data, train_label)
+
+  def test_model(self, test_data, test_label):
+    pred = self.classifier.predict(test_data)
+    accuracy = accuracy_score(test_label, pred)
+    recall = recall_score(test_label, pred)
+    precision = precision_score(test_label, pred)
+    f1 = f1_score(test_label, pred)
+
+    print('acc: {}'.format(accuracy))
+    print('recall: {}'.format(recall))
+    print('precision: {}'.format(precision))
+    print('f1: {}'.format(f1))
+
+
+
+print('XGBoost for Classification')
+print('=========================================================================================')
+print('min-max model\n')
+min_max_xgboost_classifier = XGBoostClassifier(random_state)
+min_max_xgboost_classifier.train_model(min_max_train_data, min_max_train_label_data)
+min_max_xgboost_classifier.test_model(min_max_test_data, min_max_test_label_data)
+
+print('=========================================================================================')
+print('imbalanced min-max model\n')
+imbalance_xgboost_classifier = XGBoostClassifier(random_state)
+imbalance_xgboost_classifier.train_model(imbalance_min_max_train_data, imbalance_min_max_train_label_data)
+imbalance_xgboost_classifier.test_model(imbalance_min_max_test_data, imbalance_min_max_test_label_data)
+
+print('=========================================================================================')
+print('standardize model\n')
+standardize_xgboost_classifier = XGBoostClassifier(random_state)
+standardize_xgboost_classifier.train_model(standardize_train_data, standardize_train_label_data)
+standardize_xgboost_classifier.test_model(standardize_test_data, standardize_test_label_data)
+
+print('=========================================================================================')
+print('imbalanced standardize model\n')
+imbalanced_standardize_xgboost_classifier = XGBoostClassifier(random_state)
+imbalanced_standardize_xgboost_classifier.train_model(imbalance_standardize_train_data, imbalance_standardize_train_label_data)
+imbalanced_standardize_xgboost_classifier.test_model(imbalance_standardize_test_data, imbalance_standardize_test_label_data)
+
+
+
+# joblib.dump(min_max_sklearn_dt_classifier, './test_python/AI_Assign/model/min_max_sklearn_dt_classifier.pkl')
+# joblib.dump(imbalanced_min_max_sklearn_dt_classifier, './test_python/AI_Assign/model/imbalanced_min_max_sklearn_dt_classifier.pkl')
+
+# torch.save(min_max_logistic_regressor.state_dict(), './test_python/AI_Assign/model/min_max_torch_logistic_regressor.pt')
+# torch.save(imbalanced_min_max_logistic_regressor.state_dict(), './test_python/AI_Assign/model/imbalanced_min_max_torch_logistic_regressor.pt')
+
+# joblib.dump(standardize_sklearn_dt_classifier, './test_python/AI_Assign/model/standardize_sklearn_dt_classifier.pkl')
+# joblib.dump(imbalanced_standardize_sklearn_dt_classifier, './test_python/AI_Assign/model/imbalanced_standardize_sklearn_dt_classifier.pkl')
+
+# torch.save(standardize_logistic_regressor.state_dict(), './test_python/AI_Assign/model/standardize_torch_logistic_regressor.pt')
+# torch.save(imbalanced_standardize_logistic_regressor.state_dict(), './test_python/AI_Assign/model/imbalanced_standardize_torch_logistic_regressor.pt')
+
+
+# # Î™®Îç∏ Load
+# loaded_min_max_sklearn_dt_classifier = joblib.load('./test_python/AI_Assign/model/min_max_sklearn_dt_classifier.pkl')
+# loaded_imbalanced_min_max_sklearn_dt_classifier = joblib.load('./test_python/AI_Assign/model/imbalanced_min_max_sklearn_dt_classifier.pkl')
+
+# loaded_logistic_regressor = TorchLogisticRegression(min_max_test_data, num_binomial_class).to(device)
+# loaded_logistic_regressor.load_state_dict(torch.load('./test_python/AI_Assign/model/torch_logistic_regressor.pt'))
+
+# loaded_imbalanced_logistic_regressor = TorchLogisticRegression(imbalance_min_max_test_data, num_binomial_class).to(device)
+# loaded_imbalanced_logistic_regressor.load_state_dict(torch.load('./test_python/AI_Assign/model/torch_imbalanced_logistic_regressor.pt'))
+
+# print('Test Logistic Regressor/Imbalanced Logisitic Regressor')
+# test_logistic_regressor(min_max_test_data, min_max_test_label_data, loaded_logistic_regressor, device)
+# test_logistic_regressor(imbalance_min_max_test_data, imbalance_min_max_test_label_data, loaded_imbalanced_logistic_regressor, device)
+# print('Test Decision Tree/Imbalanced Decision Tree')
+# test_decision_tree(loaded_sklearn_dt_classifier, min_max_test_data, min_max_test_label_data)
+# test_decision_tree(loaded_imbalanced_sklearn_dt_classifier, imbalance_min_max_test_data, imbalance_min_max_test_label_data)
