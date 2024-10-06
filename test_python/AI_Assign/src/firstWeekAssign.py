@@ -158,7 +158,10 @@ elif missing_value_flag == 'replace':
     for feature_name in eda_df.columns:
         if eda_df[feature_name].dtype in ['int32', 'int64', 'float32', 'float64']:
             if eda_df[feature_name].isnull().sum() > 0:                                   # 결측치가 1개 이상이면
-                eda_df[feature_name].fillna(eda_df[feature_name].mean(), inplace=True)    # 컬럼의 평균값을 넣는다 eda_df[feature_name].mean() -> 평균, inplace=True 원본 데이터프레임에 직접 적용
+               # eda_df[feature_name].fillna(eda_df[feature_name].mean(), inplace=True)    # 컬럼의 평균값을 넣는다 eda_df[feature_name].mean() -> 평균, inplace=True 원본 데이터프레임에 직접 적용
+                eda_df[feature_name].fillna(eda_df[feature_name].mode(), inplace=True)    # 컬럼의 최빈값을 넣는다 eda_df[feature_name].mode -> 최빈값, inplace=True 원본 데이터프레임에 직접 적용
+               # eda_df[feature_name].fillna(eda_df[feature_name].median(), inplace=True)   # 컬럼의 중간값을 넣는다 eda_df[feature_name].median() -> 중간, inplace=True 원본 데이터프레임에 직접 적용
+
         else:
             if eda_df[feature_name].isnull().sum() > 0:                                   # 결측치가 1개 이상이면
                 mode_value = eda_df[feature_name].mode()[0]                               # 최빈값으로 넣는다.
@@ -319,7 +322,7 @@ imbalance_min_max_test_data, imbalance_min_max_test_label_data = loanImbalanceCl
 imbalance_standardize_train_data, imbalance_standardize_train_label_data = loanImbalanceClass("train", "standardize")
 imbalance_standardize_test_data, imbalance_standardize_test_label_data = loanImbalanceClass("test", "standardize")
 
-# 모델정의, 정답이 두개니 BinomialLogistic, pytorch
+# 모델정의, 정답이 두개니 BinomialLogistic
 class TorchLogisticRegression(nn.Module):
   def __init__(self, data, num_class):
     super(TorchLogisticRegression, self).__init__()
@@ -336,6 +339,7 @@ class TorchLogisticRegression(nn.Module):
     torch_weight, torch_bias = self.logistic_regressor.weight.detach().cpu().numpy(), self.logistic_regressor.bias.detach().cpu().numpy()
 
     return torch_weight, torch_bias
+# learning_rate = 1e-4 #  5e-3, 1e-4, 5e-4, 1e-5
 
 min_max_logistic_regressor = TorchLogisticRegression(min_max_train_data, num_binomial_class).to(device)
 min_max_torch_model_optimizer = torch.optim.SGD(min_max_logistic_regressor.parameters(), lr =learning_rate)
@@ -364,6 +368,7 @@ def train_logistic_regressor(data, label, model, criterion, optimizer, epochs, d
     loss.backward()
     optimizer.step()
     
+epochs = 200
 
 train_logistic_regressor(min_max_train_data, min_max_train_label_data, min_max_logistic_regressor, criterion, min_max_torch_model_optimizer, epochs, device)
 
@@ -391,6 +396,7 @@ def test_logistic_regressor(data, label, model, device):
     ConfusionMatrixDisplay(result_confusion_matrix, display_labels=[0, 1]).plot()
     plt.show()
     
+
 print('Logistic Regressor')
 print('=========================================================================================')
 print('min_max model\n')
@@ -449,7 +455,7 @@ class SklearnDecisionTreeClassifier:
         precision = precision_score(label, pred)
         recall = recall_score(label, pred)
         f1_measure = f1_score(label, pred)
-        print('acc: {}/precision: {}/recall: {}/f1-measure: {}'.format(accuracy, precision, recall, f1_measure))
+        print('acc: {} / precision: {} / recall: {} / f1-measure: {}'.format(accuracy, precision, recall, f1_measure))
 
         result_confusion_matrix = confusion_matrix(label, pred)
         ConfusionMatrixDisplay(result_confusion_matrix, display_labels=[0, 1]).plot()
@@ -505,7 +511,7 @@ class SklearnRandomForestClassifier:
     recall = recall_score(test_label, pred)
     f1_measure = f1_score(test_label, pred)
 
-    print('acc: {}/precision: {}/recall: {}/f1-measure: {}'.format(accuracy, precision, recall, f1_measure))
+    print('acc: {} / precision: {} / recall: {} / f1-measure: {}'.format(accuracy, precision, recall, f1_measure))
     
 
 print('Random Forest')
