@@ -2,7 +2,11 @@
 import requests
 import pandas
 
+
 def main():
+    return
+
+def KakaoLocalSerchAPI():
     query="서울 카페"
     total_data = []
     total_cnt = 0
@@ -30,9 +34,6 @@ def main():
             print(f"Error Code: {response.status_code}")
         
     print("len(total_data) : {}".format(len(total_data)))
-    return
-
-
 
 
 
