@@ -78,6 +78,10 @@ def getRepackListFile():
 
 # 메인 함수
 def main():  
+    
+    if True:
+        DbConnect.sp_ctsinfo_find()
+        return
     rawBucketName = 'coretrust-raw-data'
     rePackBucketName = 'coretrust-repacked-data'
     rawDict = S3Util.getObjectInBucket(rawBucketName)
