@@ -173,7 +173,7 @@ DWORD Protocol::CMD_InfoReq_RegUse(SOCKET_OBJ *lpsockobj) {
 
 
 	printf("[%s] CMD_INFO_REQ end ===== [AgentID=%ld, SplunkUrl=%s, baseGnere=%s, Reserved=%s, EMMCacheFlag=%d, TestBedFlag=%d, Message=%s, DurationTime=%.3f]",
-		lpsockobj->sz_client_ip, m_ProtocolHeader.ul_AgentID, g_stSplunkInfo.sz_SplunkUrl, g_stSplunkInfo.sz_BaseGenre, g_stSplunkInfo.sz_Reserved, g_stSplunkInfo.ul_EMMCacheFlag, g_stSplunkInfo.ul_TestBedFlag, ResultMessage, float(lpsockobj->dwFinishTime - lpsockobj->dwBeginTime) / 1000);
+		lpsockobj->sz_client_ip, m_ProtocolHeader.ul_AgentID, g_stSplunkInfo.sz_SplunkUrl, g_stSplunkInfo.sz_BaseGenre, g_stSplunkInfo.sz_Reserved, g_stSplunkInfo.ul_EMMCacheFlag, g_stSplunkInfo.ul_SplunkFlag, ResultMessage, float(lpsockobj->dwFinishTime - lpsockobj->dwBeginTime) / 1000);
 
 	return retVal;
 }

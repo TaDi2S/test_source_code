@@ -165,7 +165,7 @@ void DBProcessor::fetchResults(PACKET_INFO_RES* packetStruct) {
 
 DWORD DBProcessor::GetSplunkInfo(unsigned long ul_AgentID, PACKET_INFO_RES* packetStruct) {
 	if (Connect()) {
-		if (executeQuery(L"SELECT  *, LEN(splunkUrl) AS SplunkUrlLen, LEN(reserved) AS ReservedLen, LEN(baseGenre) AS BaseGenreLen FROM TempSplunkTestTable WHERE agentId = 123456")) {
+		if (executeQuery(L"SELECT  *, LEN(splunkUrl) AS SplunkUrlLen, LEN(reserved) AS ReservedLen, FROM TempSplunkTestTable WHERE agentId = 123456")) {
 			fetchResults(packetStruct);
 
 			// 결과 출력

@@ -9,6 +9,14 @@
 #include <minwindef.h>
 #include <atlstr.h>
 
+#include <iostream>
+#include <ws2tcpip.h>
+#pragma comment(lib, "Ws2_32.lib")
+
+#define PORT 8080
+#define BUFFER_SIZE 1024
+
+
 #define		BUFFER_SIZE							16384
 #define		CMD_INFO_REQ						0x4301		// [2024.10.16. dykim] Splunk 정보 요청 프로토콜 추가
 #define		CMD_INFO_RES						0x4302		// [2024.10.16. dykim] Splunk 정보 응답 프로토콜 추가
@@ -26,6 +34,9 @@
 
 #define		ERROR_DEVICE_STATE_DISABLED				0x2000000E		// STB_type 에 대하여 license_device 테이블에 데이터 없거나, status disable 상태
 #define		ERROR_DEVICE_ID_DISABLED					0x20000022		// STB_type 에 대하여 license_device 테이블에 데이터 없거나, status disable 상태
+#define		PROTOCOL_VERSION					4
+// 2007-10-05 : add 
+#define		PROTOCOL_VERSION_5					5
 
 #define BOOL	int					//	1-bit data type
 #define BYTE	unsigned char		//	unsigned 1-byte data type
@@ -45,12 +56,13 @@ typedef unsigned long       DWORD;
 
 typedef struct _PACKET_INFO_RES
 {
+	unsigned int	ul_SplunkFlag;			//Splunk 연동 Flag (1: 사용, 0:미사용)
 	unsigned int 	ul_SplunkUrlLen;		// sz_SplunkUrl의 길이
 	unsigned int	ul_ReservedLen;		// sz_Reserved의 길이
 	unsigned int	ul_BaseGenreLen;		// sz_BaseGenre의 길이
 	unsigned int	ul_EMMCacheFlag;		//EMM cache 사용 flag (1:사용, 0: 미사용)
-	unsigned int	ul_TestBedFlag;			// 테스트 베드인지 아닌지
-	char				*sz_BaseGenre;			// 기본 채널 장르 Code 값
+	unsigned int	ul_OperationMode;	// 운영모드: ( 1: 상용, 0: 개발)
+	char				*sz_BaseGenre;			// 필수시청채널 장르 코드 배열
 	char				*sz_SplunkUrl;			// Splunk 연동 URL 값
 	char				*sz_Reserved;			// reserved -> 확장성을 위해 임시로 잡아둔 것
 } PACKET_INFO_RES;

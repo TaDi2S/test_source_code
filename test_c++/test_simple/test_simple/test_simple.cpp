@@ -4,33 +4,121 @@
 #include "def.h"
 #include "RegUtil.h"
 #include "Protocol.h"
-
+#include "SocketClient.h"
+#include "API.h"
 
 PACKET_HEADER	m_ProtocolHeader;
 PACKET_INFO_RES g_stSplunkInfo;
 
 int main()
 {	
-
 	if (true) {
-		int a, r;
-		scanf("%d%d", &a, &r);
+		API api;
+		SOCKET_OBJ  *lpsockobj = NULL;
+		unsigned char uc_X[16] = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 };
+		unsigned char uc_Y[16] = { 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1 };
+		lpsockobj = (SOCKET_OBJ *)malloc(sizeof(SOCKET_OBJ));
 
-		long double rev = 0;
-		long double k = 1;
 
+		// EncKey 생성하여 socket->sz_EncKey 저장.
+		api.GenerateEncKey(uc_X, uc_Y, (unsigned char*)lpsockobj->sz_DHEncKey);
+		
+		SocketClient client;
+
+		client.Init("192.168.10.33", 7845);
+		PACKET_HEADER tempHeader;
+
+		tempHeader.sh_ProtocolID = 0x1234;
+		tempHeader.ul_AgentID = 123456;
+		tempHeader.sh_ProtocolVer = PROTOCOL_VERSION;
+		tempHeader.us_ProtocolCommand = CMD_INFO_REQ;
+		tempHeader.us_ProtocolDataSize = 0;
+
+		char buffer[1024] = { 0, };
+
+		memcpy(buffer, &tempHeader, sizeof(PACKET_HEADER));
+		
+		int a = 1;
 		while (a != 0) {
-			rev += a % r * k;
-			k *= 10.;
-			a /= r;
-		}
+			client.CreateSocket();
+			client.Connect();
 
-		printf("%f\n", rev);
+			client.SendData(buffer, sizeof(PACKET_HEADER));
+
+			char recvBuf[4096] = { 0, };
+			PACKET_HEADER recvHeader;
+			PACKET_INFO_RES recvData;
+			memset(&recvData, 0, sizeof(PACKET_INFO_RES));
+			memset(&recvHeader, 0, sizeof(PACKET_HEADER));
+			unsigned char tmpBuf[1024] = { 0, };
+
+			client.receiveData(recvBuf, 4096);
+
+			std::cout << recvBuf << std::endl;
+
+			memcpy(&recvHeader, recvBuf, sizeof(PACKET_HEADER));
+			
+			memcpy(&tmpBuf, recvBuf + sizeof(PACKET_HEADER), recvHeader.us_ProtocolDataSize);
+			lpsockobj->sz_DHEncKey[16] = 0x00;
+			api.AES_Decrypt((unsigned char*)lpsockobj->sz_DHEncKey, tmpBuf, recvHeader.us_ProtocolDataSize);			// enc key
+			
+			std::cout << std::endl;
+
+			int ptr = sizeof(PACKET_INFO_RES) - (sizeof(char*) * 3);
+
+			memcpy(&recvData, tmpBuf, sizeof(PACKET_INFO_RES) - (sizeof(char*) * 3));
+
+			printf("recvData.ul_SplunkFlag:%u\nrecvData.ul_SplunkUrlLen:%u\nrecvData.ul_ReservedLen:%u\nrecvData.ul_BaseGenreLen:%u\nrecvData.ul_EMMCacheFlag:%u\nrecvData.ul_OperationMode:%u\n",
+				recvData.ul_SplunkFlag, recvData.ul_SplunkUrlLen, recvData.ul_ReservedLen, recvData.ul_BaseGenreLen, recvData.ul_EMMCacheFlag, recvData.ul_OperationMode);
+
+			recvData.sz_SplunkUrl = (char*)malloc(recvData.ul_SplunkUrlLen);
+			memcpy(recvData.sz_SplunkUrl, tmpBuf + ptr, recvData.ul_SplunkUrlLen);
+			ptr += recvData.ul_SplunkUrlLen;
+			recvData.sz_BaseGenre = (char*)malloc(recvData.ul_SplunkUrlLen);
+			memcpy(recvData.sz_BaseGenre, tmpBuf + ptr, recvData.ul_BaseGenreLen);
+			ptr += recvData.ul_BaseGenreLen;
+			recvData.sz_Reserved = (char*)malloc(recvData.ul_SplunkUrlLen);
+			memcpy(recvData.sz_Reserved, tmpBuf + ptr, recvData.ul_ReservedLen);
+
+			printf("recvData.sz_SplunkUrl:%s\nrecvData.sz_BaseGenre:%s\nrecvData.sz_Reserved:%s\n",
+				recvData.sz_SplunkUrl, recvData.sz_BaseGenre, recvData.sz_Reserved);
+			client.CloseSocket();
+
+			std::cout << "다시 안 하려면 0 아니면 다른 숫자 입력" << std::endl;
+
+			std::cin >> a;
+		}
 
 		return 0;
 	}
 
-	if (true) {
+	Protocol c_protocol;
+	if (false) {
+
+		return 0;
+	}
+
+	if (false) {
+		PACKET_HEADER tempHeader;
+
+		tempHeader.sh_ProtocolID = 0x1234;
+		tempHeader.ul_AgentID = 123456;
+		tempHeader.sh_ProtocolVer = 0x0003;
+		tempHeader.us_ProtocolCommand = CMD_INFO_REQ;
+		tempHeader.us_ProtocolDataSize = 0;
+
+		SOCKET_OBJ lpsockobj;
+
+		strncpy(lpsockobj.sz_client_ip, "127.0.0.1", 10);
+
+		memcpy(lpsockobj.buf, &tempHeader, sizeof(tempHeader));
+
+		c_protocol.CMD_InfoReq_dbUse(&lpsockobj);
+
+		return 0;
+	}
+
+	if (false) {
 		PACKET_HEADER tempHeader;
 
 		tempHeader.sh_ProtocolID = 0x1234;
@@ -84,8 +172,8 @@ int main()
 		printf("ul_EMMCacheFlag: %d\n", g_stSplunkInfo.ul_EMMCacheFlag);
 
 		RegUtil::SHRegReadString(HKEY_LOCAL_MACHINE, strRegRoot, "TestBedFlag", "", szData, 8);
-		g_stSplunkInfo.ul_TestBedFlag = atoi(szData);
-		printf("ul_TestBedFlag: %d\n", g_stSplunkInfo.ul_TestBedFlag);
+		g_stSplunkInfo.ul_SplunkFlag = atoi(szData);
+		printf("ul_TestBedFlag: %d\n", g_stSplunkInfo.ul_SplunkFlag);
 
 		Protocol tmpProtocol;
 
